@@ -1,0 +1,87 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import torch
+import torch.nn as nn
+import torch.optim as optim
+
+def generate_wealth_signal(freqs, t):
+    """Generate wealth signal as a sum of sine waves."""
+    signal = np.sum([np.sin(2 * np.pi * f * t) for f in freqs], axis=0)
+    return signal
+
+sampling_rate = 1000
+T = 1.0 / sampling_rate
+t = np.linspace(0.0, 1.0, sampling_rate, endpoint=False)
+
+wealth_frequencies = [150, 300, 450]
+wealth_signal = generate_wealth_signal(wealth_frequencies, t)
+
+class WealthTransferNN(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size):
+        super(WealthTransferNN, self).__init__()
+        self.transfer_layer = nn.Linear(input_size, hidden_size)
+        self.storage_layer = nn.Linear(hidden_size, output_size)
+
+    def forward(self, x):
+        transferred_signal = torch.relu(self.transfer_layer(x))
+        stored_signal = torch.sigmoid(self.storage_layer(transferred_signal))
+        return transferred_signal, stored_signal
+
+input_size = 1
+hidden_size = 64
+output_size = 1
+
+model = WealthTransferNN(input_size, hidden_size, output_size)
+
+wealth_signal_tensor = torch.tensor(wealth_signal, dtype=torch.float32).view(-1,1)
+
+optimizer = optim.Adam(model.parameters(), lr=0.01)
+criterion = nn.MSELoss()
+
+epochs = 100
+for epoch in range(epochs):
+    model.train()
+
+    transferred_signal, stored_signal = model(wealth_signal_tensor)
+
+    loss = criterion(stored_signal, wealth_signal_tensor)
+
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+
+    if epoch % 10 == 0:
+        print(f'Epoch[{epoch}/{epochs}], Loss: {loss.item():.4f}')
+
+with torch.no_grad():
+    model.eval()
+    transferred_signal, stored_signal = model(wealth_signal_tensor)
+
+transferred_signal = transferred_signal.numpy()
+stored_signal = stored_signal.numpy()
+
+plt.figure(figsize=(12, 8))
+
+plt.subplot(3, 1, 1)
+plt.plot(t, wealth_signal, label='Original Wealth Signal', color='blue', alpha=0.7)
+plt.title('Original Wealth Signal')
+plt.xlabel('Time [s]')
+plt.ylabel('Amplitude')
+plt.grid(True)
+
+plt.subplot(3, 1, 2)
+plt.plot(t, transferred_signal, label='Transferred Wealth Signal (NN Output)', color='green', alpha=0.7)
+plt.title('Transferred Wealth Signal')
+plt.xlabel('Time [s]')
+plt.ylabel('Amplitude')
+plt.grid(True)
+
+plt.subplot(3, 1, 3)
+plt.plot(t, stored_signal, label='Stored Wealth Signal (After Transfer)', color='red', alpha=0.7)
+plt.title('Stored Wealth Signal')
+plt.xlabel('Time[s]')
+plt.ylabel('Amplitude')
+plt.grid(True)
+
+plt.tight_layout()
+plt.show()
